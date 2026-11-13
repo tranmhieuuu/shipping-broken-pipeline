@@ -1,0 +1,44 @@
+name: Shipping CI - Broken Pipeline Debug Lab
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build and run JUnit tests
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      # Ensure that an obsolete test runner cannot report a false green build.
+      - name: Confirm JUnit tests actually ran
+        shell: bash
+        run: |
+          REPORT="target/surefire-reports/com.lab.ShippingCalculatorTest.txt"
+          test -f "$REPORT" || { echo "ERROR: Surefire did not generate JUnit 5 test report"; exit 1; }
+          cat "$REPORT"
+          grep -Eq 'Tests run: 3, Failures: 0, Errors: 0' "$REPORT" \
+            || { echo "ERROR: Expected 3 passing JUnit tests"; exit 1; }
+
+      - name: Verify executable JAR
+        run: |
+          test -s target/shipping-app-1.0-SNAPSHOT.jar
+          java -jar target/shipping-app-1.0-SNAPSHOT.jar
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v7
+        with:
+          name: shipping-app-jar
+          path: target/shipping-app-1.0-SNAPSHOT.jar
+          if-no-files-found: error
